@@ -64,9 +64,9 @@ class PyHcclCommunicator:
 
         # A small all_reduce for warmup.
         data = torch.ones(1, device="hpu")
-        out = self.all_reduce(data)
-        del data
+        self.all_reduce(data)
         torch.hpu.synchronize()
+        del data
 
     def all_reduce(
         self, in_tensor: torch.Tensor, op: ReduceOp = ReduceOp.SUM
@@ -91,8 +91,6 @@ class PyHcclCommunicator:
             return
         assert input_tensor.device.type == "hpu", f"the input tensor should be on hpu"
 
-        htorch.core.mark_step()
-        torch.hpu.synchronize()
         self.hccl.hcclAllGather(
             buffer_type(htutils.experimental._data_ptr(input_tensor)),
             buffer_type(htutils.experimental._data_ptr(output_tensor)),
@@ -113,8 +111,6 @@ class PyHcclCommunicator:
         assert input_tensor.device.type == "hpu", f"the input tensor should be on hpu"
         assert output_tensor.device.type == "hpu", f"the output tensor should be on hpu"
 
-        htorch.core.mark_step()
-        torch.hpu.synchronize()
         self.hccl.hcclReduceScatter(
             buffer_type(htutils.experimental._data_ptr(input_tensor)),
             buffer_type(htutils.experimental._data_ptr(output_tensor)),
@@ -130,8 +126,6 @@ class PyHcclCommunicator:
             return
         assert tensor.device.type == "hpu", f"the input tensor should be on hpu"
 
-        htorch.core.mark_step()
-        torch.hpu.synchronize()
         self.hccl.hcclSend(
             buffer_type(htutils.experimental._data_ptr(tensor)),
             tensor.numel(),
@@ -146,8 +140,6 @@ class PyHcclCommunicator:
             return
         assert tensor.device.type == "hpu", f"the input tensor should be on hpu"
 
-        htorch.core.mark_step()
-        torch.hpu.synchronize()
         self.hccl.hcclRecv(
             buffer_type(htutils.experimental._data_ptr(tensor)),
             tensor.numel(),
@@ -164,8 +156,6 @@ class PyHcclCommunicator:
         sendbuff = buffer_type(htutils.experimental._data_ptr(tensor))
         recvbuff = buffer_type(htutils.experimental._data_ptr(tensor))
 
-        htorch.core.mark_step()
-        torch.hpu.synchronize()
         self.hccl.hcclBroadcast(
             sendbuff,
             recvbuff,
