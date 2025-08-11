@@ -1,10 +1,10 @@
 import torch
 import habana_frameworks.torch as ht
-from vllm.utils import get_open_port
+from pyhccl import PyHcclCommunicator
+from pyhccl.utils import StatelessProcessGroup
+
 
 def stateless_init_process_group(master_address, master_port, rank, world_size):
-    from pyhccl import PyHcclCommunicator
-    from vllm.distributed.utils import StatelessProcessGroup
     pg = StatelessProcessGroup.create(host=master_address,
                                       port=master_port,
                                       rank=rank,
@@ -56,7 +56,7 @@ if __name__ == "__main__":
                         help="Master node IP address")
     parser.add_argument("--master-port",
                         type=int,
-                        default=0,
+                        default=4400,
                         help="Master node port")
     args = parser.parse_args()
 
@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     if node_size == 1:
         dp_master_ip = "127.0.0.1"
-        dp_master_port = get_open_port()
+        dp_master_port = args.master_port
     else:
         dp_master_ip = args.master_addr
         dp_master_port = args.master_port

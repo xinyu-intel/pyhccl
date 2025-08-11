@@ -1,4 +1,5 @@
 import ctypes
+import logging
 import platform
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -6,9 +7,7 @@ from typing import Any, Dict, List, Optional
 import torch
 from torch.distributed import ReduceOp
 
-from vllm.logger import init_logger
-
-logger = init_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 hcclResult_t = ctypes.c_int
@@ -108,11 +107,7 @@ class HCCLLibrary:
             [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32],
         ),
         # synStatus SYN_API_CALL synStreamSynchronize( const synStreamHandle streamHandle );
-        Function(
-            "synStreamSynchronize",
-            ctypes.c_int32,
-            [ctypes.c_void_p],
-        ),
+        Function("synStreamSynchronize", ctypes.c_int32, [ctypes.c_void_p]),
         # const char* hcclGetErrorString(hcclResult_t result);
         Function("hcclGetErrorString", ctypes.c_char_p, [hcclResult_t]),
         # hcclResult_t hcclGetVersion(int* version);
@@ -279,8 +274,10 @@ class HCCLLibrary:
                 "Failed to load HCCL library from %s ."
                 "It is expected if you are not running on Gaudi."
                 "Otherwise, the hccl library might not exist, be corrupted "
-                "or it does not support the current platform %s.", so_file,
-                platform.platform())
+                "or it does not support the current platform %s.",
+                so_file,
+                platform.platform(),
+            )
             raise e
 
         if so_file not in HCCLLibrary.path_to_dict_mapping:
@@ -294,7 +291,9 @@ class HCCLLibrary:
         self._funcs = HCCLLibrary.path_to_dict_mapping[so_file]
 
     def synStreamCreateGeneric(self):
-        res = self._funcs["synStreamCreateGeneric"](ctypes.byref(self.streamHandle), 0, 0)
+        res = self._funcs["synStreamCreateGeneric"](
+            ctypes.byref(self.streamHandle), 0, 0
+        )
         assert res == 0
 
     def synStreamSynchronize(self):
@@ -321,74 +320,133 @@ class HCCLLibrary:
 
     def hcclGetUniqueId(self) -> hcclUniqueId:
         unique_id = hcclUniqueId()
-        self.HCCL_CHECK(self._funcs["hcclGetUniqueId"](
-            ctypes.byref(unique_id)))
+        self.HCCL_CHECK(self._funcs["hcclGetUniqueId"](ctypes.byref(unique_id)))
         return unique_id
 
-    def hcclCommInitRank(self, world_size: int, unique_id: hcclUniqueId,
-                         rank: int) -> hcclComm_t:
+    def hcclCommInitRank(
+        self, world_size: int, unique_id: hcclUniqueId, rank: int
+    ) -> hcclComm_t:
         comm = hcclComm_t()
-        self.HCCL_CHECK(self._funcs["hcclCommInitRank"](ctypes.byref(comm),
-                                                        world_size, unique_id,
-                                                        rank))
+        self.HCCL_CHECK(
+            self._funcs["hcclCommInitRank"](
+                ctypes.byref(comm), world_size, unique_id, rank
+            )
+        )
         return comm
 
-    def hcclAllReduce(self, sendbuff: ctypes.c_void_p, recvbuff: ctypes.c_void_p,
-                      count: int, datatype: int, op: int, comm: hcclComm_t,
-                      stream: ctypes.c_void_p) -> None:
+    def hcclAllReduce(
+        self,
+        sendbuff: ctypes.c_void_p,
+        recvbuff: ctypes.c_void_p,
+        count: int,
+        datatype: int,
+        op: int,
+        comm: hcclComm_t,
+        stream: ctypes.c_void_p,
+    ) -> None:
         # `datatype` actually should be `hcclDataType_t`
         # and `op` should be `hcclRedOp_t`
         # both are aliases of `ctypes.c_int`
         # when we pass int to a function, it will be converted to `ctypes.c_int`
         # by ctypes automatically
-        self.HCCL_CHECK(self._funcs["hcclAllReduce"](sendbuff, recvbuff, count,
-                                                     datatype, op, comm,
-                                                     stream))
+        self.HCCL_CHECK(
+            self._funcs["hcclAllReduce"](
+                sendbuff, recvbuff, count, datatype, op, comm, stream
+            )
+        )
 
-    def hcclReduceScatter(self, sendbuff: ctypes.c_void_p, recvbuff: ctypes.c_void_p,
-                          count: int, datatype: int, op: int, comm: hcclComm_t,
-                          stream: ctypes.c_void_p) -> None:
+    def hcclReduceScatter(
+        self,
+        sendbuff: ctypes.c_void_p,
+        recvbuff: ctypes.c_void_p,
+        count: int,
+        datatype: int,
+        op: int,
+        comm: hcclComm_t,
+        stream: ctypes.c_void_p,
+    ) -> None:
         # `datatype` actually should be `hcclDataType_t`
         # and `op` should be `hcclRedOp_t`
         # both are aliases of `ctypes.c_int`
         # when we pass int to a function, it will be converted to `ctypes.c_int`
         # by ctypes automatically
-        self.HCCL_CHECK(self._funcs["hcclReduceScatter"](sendbuff, recvbuff,
-                                                         count, datatype, op,
-                                                         comm, stream))
+        self.HCCL_CHECK(
+            self._funcs["hcclReduceScatter"](
+                sendbuff, recvbuff, count, datatype, op, comm, stream
+            )
+        )
 
-    def hcclAllGather(self, sendbuff: ctypes.c_void_p, recvbuff: ctypes.c_void_p,
-                      count: int, datatype: int, comm: hcclComm_t,
-                      stream: ctypes.c_void_p) -> None:
+    def hcclAllGather(
+        self,
+        sendbuff: ctypes.c_void_p,
+        recvbuff: ctypes.c_void_p,
+        count: int,
+        datatype: int,
+        comm: hcclComm_t,
+        stream: ctypes.c_void_p,
+    ) -> None:
         # `datatype` actually should be `hcclDataType_t`
         # which is an aliases of `ctypes.c_int`
         # when we pass int to a function, it will be converted to `ctypes.c_int`
         # by ctypes automatically
-        self.HCCL_CHECK(self._funcs["hcclAllGather"](sendbuff, recvbuff, count,
-                                                     datatype, comm, stream))
+        self.HCCL_CHECK(
+            self._funcs["hcclAllGather"](
+                sendbuff, recvbuff, count, datatype, comm, stream
+            )
+        )
 
-    def hcclSend(self, sendbuff: ctypes.c_void_p, count: int, datatype: int,
-                 dest: int, comm: hcclComm_t, stream: ctypes.c_void_p) -> None:
-        self.HCCL_CHECK(self._funcs["hcclSend"](sendbuff, count, datatype,
-                                                dest, comm, stream))
+    def hcclSend(
+        self,
+        sendbuff: ctypes.c_void_p,
+        count: int,
+        datatype: int,
+        dest: int,
+        comm: hcclComm_t,
+        stream: ctypes.c_void_p,
+    ) -> None:
+        self.HCCL_CHECK(
+            self._funcs["hcclSend"](sendbuff, count, datatype, dest, comm, stream)
+        )
 
-    def hcclRecv(self, recvbuff: ctypes.c_void_p, count: int, datatype: int,
-                 src: int, comm: hcclComm_t, stream: ctypes.c_void_p) -> None:
-        self.HCCL_CHECK(self._funcs["hcclRecv"](recvbuff, count, datatype, src,
-                                                comm, stream))
+    def hcclRecv(
+        self,
+        recvbuff: ctypes.c_void_p,
+        count: int,
+        datatype: int,
+        src: int,
+        comm: hcclComm_t,
+        stream: ctypes.c_void_p,
+    ) -> None:
+        self.HCCL_CHECK(
+            self._funcs["hcclRecv"](recvbuff, count, datatype, src, comm, stream)
+        )
 
-    def hcclBroadcast(self, sendbuff: ctypes.c_void_p, recvbuff: ctypes.c_void_p,
-                      count: int, datatype: int, root: int, comm: hcclComm_t,
-                      stream: ctypes.c_void_p) -> None:
-        self.HCCL_CHECK(self._funcs["hcclBroadcast"](sendbuff, recvbuff, count,
-                                                     datatype, root, comm,
-                                                     stream))
+    def hcclBroadcast(
+        self,
+        sendbuff: ctypes.c_void_p,
+        recvbuff: ctypes.c_void_p,
+        count: int,
+        datatype: int,
+        root: int,
+        comm: hcclComm_t,
+        stream: ctypes.c_void_p,
+    ) -> None:
+        self.HCCL_CHECK(
+            self._funcs["hcclBroadcast"](
+                sendbuff, recvbuff, count, datatype, root, comm, stream
+            )
+        )
 
     def hcclCommDestroy(self, comm: hcclComm_t) -> None:
         self.HCCL_CHECK(self._funcs["hcclCommDestroy"](comm))
 
 
 __all__ = [
-    "HCCLLibrary", "hcclDataTypeEnum", "hcclRedOpTypeEnum", "hcclUniqueId",
-    "hcclComm_t", "ctypes.c_void_p", "ctypes.c_void_p"
+    "HCCLLibrary",
+    "hcclDataTypeEnum",
+    "hcclRedOpTypeEnum",
+    "hcclUniqueId",
+    "hcclComm_t",
+    "ctypes.c_void_p",
+    "ctypes.c_void_p",
 ]
