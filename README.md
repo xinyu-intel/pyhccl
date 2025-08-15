@@ -51,4 +51,4 @@ comm.all_reduce(t)
 torch.hpu.synchronize()
 ```
 
-This piece of code is an example of AddReduce. See the complete code [here](https://github.com/xinyu-intel/pyhccl/blob/main/examples/allreduce.py)
+This piece of code is an example of AllReduce. See the complete code [here](https://github.com/xinyu-intel/pyhccl/blob/main/examples/allreduce.py)
