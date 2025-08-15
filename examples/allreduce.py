@@ -16,14 +16,13 @@ def stateless_init_process_group(master_address, master_port, rank, world_size):
 def main(node_size, nproc_per_node, local_rank, global_rank, master_ip, master_port, output_dir):
     
     results = []
-    port_num = 0
+    t = torch.ones(1, device='hpu', dtype=torch.bfloat16)
+    comm = stateless_init_process_group(master_ip, master_port, global_rank, nproc_per_node * node_size)
     # Iterate over powers of 2 for tensor sizes
     for power in range(10, 25):  # From 2^10 to 2^24 elements
         size = 2 ** power
         
         t = torch.ones(size, device='hpu', dtype=torch.bfloat16)
-        comm = stateless_init_process_group(master_ip, master_port + port_num, global_rank, nproc_per_node * node_size)
-        port_num += 1
         
         # Warm up
         for _ in range(10):
