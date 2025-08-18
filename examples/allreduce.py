@@ -61,7 +61,7 @@ def main(node_size, nproc_per_node, local_rank, global_rank, master_ip, master_p
         startEv = ht.hpu.Event(enable_timing=True)
         endEv = ht.hpu.Event(enable_timing=True)
         
-        iterations = 100000
+        iterations = 20000
         total_time = 0 
         for i in range(iterations):
             startEv.record()
