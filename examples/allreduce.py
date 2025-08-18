@@ -4,6 +4,34 @@ from pyhccl import PyHcclCommunicator
 from pyhccl.utils import StatelessProcessGroup
 import csv
 import os
+import psutil
+
+def set_cpu_affinity(local_rank, nproc_per_node):
+    """Set CPU affinity for the current process based on local rank, evenly distributing all cores"""
+    try:
+        cores = int(os.popen("lscpu | grep \"Core(s) per socket\"").read().strip().split(":")[1].strip())
+        sockets = int(os.popen("lscpu | grep \"Socket(s)\"").read().strip().split(":")[1].strip())
+        total_cores = cores * sockets
+        cores_per_process = total_cores // nproc_per_node
+        
+        if cores_per_process == 0:
+            cores_per_process = 1
+            print(f"[Rank {local_rank}] Warning: Not enough cores for optimal distribution")
+        
+        # Simple even distribution of cores
+        start_core = local_rank * cores_per_process
+        end_core = min(start_core + cores_per_process, total_cores)
+        
+        allocated_cores = list(range(start_core, end_core))
+        
+        # Set CPU affinity
+        current_process = psutil.Process()
+        current_process.cpu_affinity(allocated_cores)
+        
+        print(f"[Rank {local_rank}] Set CPU affinity to cores: {allocated_cores}")
+        
+    except Exception as e:
+        print(f"[Rank {local_rank}] Warning: Failed to set CPU affinity: {e}")
 
 def stateless_init_process_group(master_address, master_port, rank, world_size):
     pg = StatelessProcessGroup.create(host=master_address,
@@ -14,7 +42,9 @@ def stateless_init_process_group(master_address, master_port, rank, world_size):
     return pyhccl
 
 def main(node_size, nproc_per_node, local_rank, global_rank, master_ip, master_port, output_dir):
-    
+    # Set CPU affinity for this process
+    set_cpu_affinity(local_rank, nproc_per_node)
+
     results = []
     t = torch.ones(1, device='hpu', dtype=torch.bfloat16)
     comm = stateless_init_process_group(master_ip, master_port, global_rank, nproc_per_node * node_size)
@@ -31,7 +61,7 @@ def main(node_size, nproc_per_node, local_rank, global_rank, master_ip, master_p
         startEv = ht.hpu.Event(enable_timing=True)
         endEv = ht.hpu.Event(enable_timing=True)
         
-        iterations = 20000
+        iterations = 100000
         total_time = 0 
         for i in range(iterations):
             startEv.record()
