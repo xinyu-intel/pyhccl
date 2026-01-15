@@ -1,1 +1,3 @@
 torch
+--extra-index-url=https://software.repos.intel.com/python/pypi
+dpctl

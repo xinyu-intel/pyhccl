@@ -1,5 +1,4 @@
 import torch
-import habana_frameworks.torch as ht
 from pyhccl import PyHcclCommunicator
 from pyhccl.utils import StatelessProcessGroup
 import csv
@@ -46,20 +45,20 @@ def main(node_size, nproc_per_node, local_rank, global_rank, master_ip, master_p
     set_cpu_affinity(local_rank, nproc_per_node)
 
     results = []
-    t = torch.ones(1, device='hpu', dtype=torch.bfloat16)
+    t = torch.ones(1, device='xpu', dtype=torch.bfloat16)
     comm = stateless_init_process_group(master_ip, master_port, global_rank, nproc_per_node * node_size)
     # Iterate over powers of 2 for tensor sizes
     for power in range(10, 25):  # From 2^10 to 2^24 elements
         size = 2 ** power
         
-        t = torch.ones(size, device='hpu', dtype=torch.bfloat16)
+        t = torch.ones(size, device='xpu', dtype=torch.bfloat16)
         
         # Warm up
         for _ in range(10):
             comm.all_reduce(t)
         
-        startEv = ht.hpu.Event(enable_timing=True)
-        endEv = ht.hpu.Event(enable_timing=True)
+        startEv = torch.xpu.Event(enable_timing=True)
+        endEv = torch.xpu.Event(enable_timing=True)
         
         iterations = 20000
         total_time = 0 
