@@ -1,7 +1,5 @@
 from typing import Optional, Union
 
-import dpctl
-
 import torch
 import torch.distributed as dist
 from torch.distributed import ProcessGroup, ReduceOp
@@ -63,8 +61,7 @@ class PyHcclCommunicator:
         
         self.oneccl.onecclSetDevice(self.rank)
         
-        self.device = dpctl.SyclDevice(f"level_zero:{self.rank}")
-        self.stream = dpctl.SyclQueue(self.device, property=("in_order"))
+        self.stream = torch.xpu.current_stream().sycl_queue
 
         # A small all_reduce for warmup.
         data = torch.ones(1, device="xpu")
@@ -86,7 +83,7 @@ class PyHcclCommunicator:
             onecclDataTypeEnum.from_torch(in_tensor.dtype),
             onecclRedOpTypeEnum.from_torch(op),
             self.comm,
-            xpuStream_t(self.stream.addressof_ref()),
+            xpuStream_t(self.stream),
         )
         return in_tensor
 
@@ -101,7 +98,7 @@ class PyHcclCommunicator:
             input_tensor.numel(),
             onecclDataTypeEnum.from_torch(input_tensor.dtype),
             self.comm,
-            xpuStream_t(self.stream.addressof_ref()),
+            xpuStream_t(self.stream),
         )
 
     def reduce_scatter(
@@ -122,7 +119,7 @@ class PyHcclCommunicator:
             onecclDataTypeEnum.from_torch(input_tensor.dtype),
             onecclRedOpTypeEnum.from_torch(op),
             self.comm,
-            xpuStream_t(self.stream.addressof_ref()),
+            xpuStream_t(self.stream),
         )
 
     def send(self, tensor: torch.Tensor, dst: int):
@@ -136,7 +133,7 @@ class PyHcclCommunicator:
             onecclDataTypeEnum.from_torch(tensor.dtype),
             dst,
             self.comm,
-            xpuStream_t(self.stream.addressof_ref()),
+            xpuStream_t(self.stream),
         )
 
     def recv(self, tensor: torch.Tensor, src: int):
@@ -150,7 +147,7 @@ class PyHcclCommunicator:
             onecclDataTypeEnum.from_torch(tensor.dtype),
             src,
             self.comm,
-            xpuStream_t(self.stream.addressof_ref()),
+            xpuStream_t(self.stream),
         )
 
     def broadcast(self, tensor: torch.Tensor, src: int):
@@ -167,5 +164,5 @@ class PyHcclCommunicator:
             onecclDataTypeEnum.from_torch(tensor.dtype),
             src,
             self.comm,
-            xpuStream_t(self.stream.addressof_ref()),
+            xpuStream_t(self.stream),
         )

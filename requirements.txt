@@ -1,3 +1,6 @@
+psutil
+
+# Install PyTorch with XPU support
+--pre
+--extra-index-url=https://download.pytorch.org/whl/nightly/xpu
 torch
---extra-index-url=https://software.repos.intel.com/python/pypi
-dpctl
