@@ -1,3 +1,4 @@
+import time
 import torch
 from pyccl import PyCCLCommunicator
 from pyccl.utils import StatelessProcessGroup
@@ -40,35 +41,42 @@ def stateless_init_process_group(master_address, master_port, rank, world_size):
     pyccl = PyCCLCommunicator(pg)
     return pyccl
 
-def main(node_size, nproc_per_node, local_rank, global_rank, master_ip, master_port, output_dir):
+def main(node_size, nproc_per_node, local_rank, global_rank, master_ip, master_port, output_dir, device):
     # Set CPU affinity for this process
     set_cpu_affinity(local_rank, nproc_per_node)
 
     results = []
-    t = torch.ones(1, device='xpu', dtype=torch.bfloat16)
+    t = torch.ones(1, device=device, dtype=torch.bfloat16)
     comm = stateless_init_process_group(master_ip, master_port, global_rank, nproc_per_node * node_size)
     # Iterate over powers of 2 for tensor sizes
     for power in range(10, 25):  # From 2^10 to 2^24 elements
         size = 2 ** power
         
-        t = torch.ones(size, device='xpu', dtype=torch.bfloat16)
+        t = torch.ones(size, device=device, dtype=torch.bfloat16)
         
         # Warm up
         for _ in range(10):
             comm.all_reduce(t)
         
-        startEv = torch.xpu.Event(enable_timing=True)
-        endEv = torch.xpu.Event(enable_timing=True)
+        if device == 'xpu':
+            startEv = torch.xpu.Event(enable_timing=True)
+            endEv = torch.xpu.Event(enable_timing=True)
         
         iterations = 20000
         total_time = 0 
         for i in range(iterations):
-            startEv.record()
-            comm.all_reduce(t)
-        
-            endEv.record()
-            endEv.synchronize()
-            iter_time = startEv.elapsed_time(endEv)
+            if device == 'xpu':
+                startEv.record()
+                comm.all_reduce(t)
+                endEv.record()
+                endEv.synchronize() # Wait for completion to measure latency
+                # For high throughput measurement, this synchronization should be moved out of the loop
+                iter_time = startEv.elapsed_time(endEv) # returns ms
+            else:
+                start = time.time()
+                comm.all_reduce(t)
+                end = time.time()
+                iter_time = (end - start) * 1000  # Convert to milliseconds
             total_time += iter_time
         avg_time = total_time / iterations
         
@@ -125,6 +133,11 @@ if __name__ == "__main__":
                         type=str,
                         default="./results",
                         help="Output directory for CSV results")
+    parser.add_argument("--device",
+                        type=str,
+                        default="xpu",
+                        choices=["cpu", "xpu"],
+                        help="Device to run benchmarks on")
     args = parser.parse_args()
 
     node_size = args.node_size
@@ -149,7 +162,7 @@ if __name__ == "__main__":
             range(node_rank * nproc_per_node, (node_rank + 1) * nproc_per_node)):
         proc = Process(target=main,
                        args=(node_size, nproc_per_node, local_rank,
-                             global_rank, dp_master_ip, dp_master_port, args.output_dir))
+                             global_rank, dp_master_ip, dp_master_port, args.output_dir, args.device))
         proc.start()
         procs.append(proc)
     exit_code = 0

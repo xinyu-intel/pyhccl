@@ -1,8 +1,7 @@
-from typing import Optional, Union
+from typing import Optional
 
 import torch
-import torch.distributed as dist
-from torch.distributed import ProcessGroup, ReduceOp
+from torch.distributed import ReduceOp
 
 from .binding import (ONECCLLibrary, buffer_type, onecclComm_t, onecclDataTypeEnum,
                       onecclRedOpTypeEnum, onecclUniqueId, xpuStream_t)
@@ -59,23 +58,20 @@ class PyCCLCommunicator:
             self.world_size, self.unique_id, self.rank
         )
         
-        self.oneccl.onecclSetDevice(self.rank)
-        
-        self.stream = torch.xpu.current_stream().sycl_queue
+        if hasattr(torch, 'xpu') and torch.xpu.is_available():
+            self.oneccl.onecclSetDevice(self.rank)
 
-        # A small all_reduce for warmup.
-        data = torch.ones(1, device="xpu")
-        self.all_reduce(data)
-        torch.xpu.synchronize()
-        del data
+    def _get_stream(self, tensor: torch.Tensor):
+        if tensor.device.type == "xpu":
+            return xpuStream_t(torch.xpu.current_stream().sycl_queue)
+        return None
 
     def all_reduce(
         self, in_tensor: torch.Tensor, op: ReduceOp = ReduceOp.SUM
     ) -> torch.Tensor:
         if self.disabled:
             return None
-        assert in_tensor.device.type == "xpu", f"the input tensor should be on xpu"
-
+        
         self.oneccl.onecclAllReduce(
             buffer_type(in_tensor.data_ptr()),
             buffer_type(in_tensor.data_ptr()),
@@ -83,14 +79,13 @@ class PyCCLCommunicator:
             onecclDataTypeEnum.from_torch(in_tensor.dtype),
             onecclRedOpTypeEnum.from_torch(op),
             self.comm,
-            xpuStream_t(self.stream),
+            self._get_stream(in_tensor),
         )
         return in_tensor
 
     def all_gather(self, output_tensor: torch.Tensor, input_tensor: torch.Tensor):
         if self.disabled:
             return
-        assert input_tensor.device.type == "xpu", f"the input tensor should be on xpu"
 
         self.oneccl.onecclAllGather(
             buffer_type(input_tensor.data_ptr()),
@@ -98,7 +93,7 @@ class PyCCLCommunicator:
             input_tensor.numel(),
             onecclDataTypeEnum.from_torch(input_tensor.dtype),
             self.comm,
-            xpuStream_t(self.stream),
+            self._get_stream(input_tensor),
         )
 
     def reduce_scatter(
@@ -109,8 +104,6 @@ class PyCCLCommunicator:
     ):
         if self.disabled:
             return
-        assert input_tensor.device.type == "xpu", f"the input tensor should be on xpu"
-        assert output_tensor.device.type == "xpu", f"the output tensor should be on xpu"
 
         self.oneccl.onecclReduceScatter(
             buffer_type(input_tensor.data_ptr()),
@@ -119,13 +112,12 @@ class PyCCLCommunicator:
             onecclDataTypeEnum.from_torch(input_tensor.dtype),
             onecclRedOpTypeEnum.from_torch(op),
             self.comm,
-            xpuStream_t(self.stream),
+            self._get_stream(input_tensor),
         )
 
     def send(self, tensor: torch.Tensor, dst: int):
         if self.disabled:
             return
-        assert tensor.device.type == "xpu", f"the input tensor should be on xpu"
 
         self.oneccl.onecclSend(
             buffer_type(tensor.data_ptr()),
@@ -133,13 +125,12 @@ class PyCCLCommunicator:
             onecclDataTypeEnum.from_torch(tensor.dtype),
             dst,
             self.comm,
-            xpuStream_t(self.stream),
+            self._get_stream(tensor),
         )
 
     def recv(self, tensor: torch.Tensor, src: int):
         if self.disabled:
             return
-        assert tensor.device.type == "xpu", f"the input tensor should be on xpu"
 
         self.oneccl.onecclRecv(
             buffer_type(tensor.data_ptr()),
@@ -147,13 +138,12 @@ class PyCCLCommunicator:
             onecclDataTypeEnum.from_torch(tensor.dtype),
             src,
             self.comm,
-            xpuStream_t(self.stream),
+            self._get_stream(tensor),
         )
 
     def broadcast(self, tensor: torch.Tensor, src: int):
         if self.disabled:
             return
-        assert tensor.device.type == "xpu", f"the input tensor should be on xpu"
         sendbuff = buffer_type(tensor.data_ptr())
         recvbuff = buffer_type(tensor.data_ptr())
 
@@ -164,5 +154,5 @@ class PyCCLCommunicator:
             onecclDataTypeEnum.from_torch(tensor.dtype),
             src,
             self.comm,
-            xpuStream_t(self.stream),
+            self._get_stream(tensor),
         )
