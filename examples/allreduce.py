@@ -1,6 +1,6 @@
 import torch
-from pyhccl import PyHcclCommunicator
-from pyhccl.utils import StatelessProcessGroup
+from pyccl import PyCCLCommunicator
+from pyccl.utils import StatelessProcessGroup
 import csv
 import os
 import psutil
@@ -37,8 +37,8 @@ def stateless_init_process_group(master_address, master_port, rank, world_size):
                                       port=master_port,
                                       rank=rank,
                                       world_size=world_size)
-    pyhccl = PyHcclCommunicator(pg)
-    return pyhccl
+    pyccl = PyCCLCommunicator(pg)
+    return pyccl
 
 def main(node_size, nproc_per_node, local_rank, global_rank, master_ip, master_port, output_dir):
     # Set CPU affinity for this process
@@ -100,7 +100,7 @@ def main(node_size, nproc_per_node, local_rank, global_rank, master_ip, master_p
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="pyhccl test")
+    parser = argparse.ArgumentParser(description="pyccl test")
     parser.add_argument("--nproc-per-node",
                         type=int,
                         default=2,

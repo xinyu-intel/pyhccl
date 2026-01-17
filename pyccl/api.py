@@ -9,7 +9,7 @@ from .binding import (ONECCLLibrary, buffer_type, onecclComm_t, onecclDataTypeEn
 from .utils import StatelessProcessGroup
 
 
-class PyHcclCommunicator:
+class PyCCLCommunicator:
 
     def __init__(
         self, group: StatelessProcessGroup, library_path: Optional[str] = None
@@ -18,8 +18,8 @@ class PyHcclCommunicator:
         Args:
             group: the process group to work on. If None, it will use the
                 default process group.
-            device: the device to bind the PyHcclCommunicator to.
-            library_path: the path to the HCCL library. If None, it will
+            device: the device to bind the PyCCLCommunicator to.
+            library_path: the path to the CCL library. If None, it will
                 use the default library path.
         It is the caller's responsibility to make sure each communicator
         is bind to a unique device.
@@ -37,7 +37,7 @@ class PyHcclCommunicator:
         try:
             self.oneccl = ONECCLLibrary(library_path)
         except Exception:
-            # disable because of missing HCCL library
+            # disable because of missing CCL library
             # e.g. in a non-GPU environment
             self.available = False
             self.disabled = True
@@ -47,7 +47,7 @@ class PyHcclCommunicator:
         self.disabled = False
 
         if self.rank == 0:
-            # get the unique id from HCCL
+            # get the unique id from CCL
             self.unique_id = self.oneccl.onecclGetUniqueId()
         else:
             # construct an empty unique id

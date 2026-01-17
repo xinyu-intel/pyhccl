@@ -2,14 +2,14 @@ import setuptools
 
 
 packages = [
-    'pyhccl',
-    'pyhccl.utils',
+    'pyccl',
+    'pyccl.utils',
 ]
 
 setuptools.setup(
-    name='pyhccl',
+    name='pyccl',
     version='0.0.1',
-    description="pyhccl - python bindings for Habana Communication library",
+    description="pyccl - python bindings for Communication library",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/xinyu-intel/pyhccl",
