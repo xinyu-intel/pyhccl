@@ -54,12 +54,12 @@ class PyCCLCommunicator:
 
         self.unique_id = group.broadcast_obj(self.unique_id, src=0)
 
+        if hasattr(torch, 'xpu') and torch.xpu.is_available():
+            self.oneccl.onecclSetDevice(torch.xpu.current_device())
+
         self.comm: onecclComm_t = self.oneccl.onecclCommInitRank(
             self.world_size, self.unique_id, self.rank
         )
-        
-        if hasattr(torch, 'xpu') and torch.xpu.is_available():
-            self.oneccl.onecclSetDevice(self.rank)
 
     def _get_stream(self, tensor: torch.Tensor):
         if tensor.device.type == "xpu":
