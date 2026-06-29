@@ -88,7 +88,9 @@ def make_gemm_fixture(shape, device):
 
 def make_cold_buffers(shape, dtype, device, count):
     """Pre-allocate independent input buffers for cold-cache measurement."""
-    return [torch.randn(shape, device=device, dtype=dtype) for _ in range(count)]
+    if dtype.is_floating_point:
+        return [torch.randn(shape, device=device, dtype=dtype) for _ in range(count)]
+    return [torch.randint(0, 127, shape, device=device, dtype=dtype) for _ in range(count)]
 
 
 def bench_all_reduce(comm, shape, dtype, device, warmup, iters):
@@ -136,7 +138,9 @@ def bench_send_recv(comm, shape, dtype, device, warmup, iters):
     bufs = make_cold_buffers(shape, dtype, device, iters)
     rank = comm.rank
     world_size = comm.world_size
-    peer = (rank + 1) % world_size if rank % 2 == 0 else (rank - 1) % world_size
+    if world_size % 2 != 0:
+        raise ValueError(f"send_recv benchmark requires even world_size, got {world_size}")
+    peer = rank + 1 if rank % 2 == 0 else rank - 1
 
     def _op(i):
         if rank % 2 == 0:
