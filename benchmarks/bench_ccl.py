@@ -244,6 +244,14 @@ def worker(
 
     results = []
 
+    col = (f"  {'op':<16}  {'dtype':<10}  {'shape':<14}"
+           f"  {'xfer_MB':>8}  {'time_us':>10}  {'algbw_GBps':>11}  {'busbw_GBps':>11}")
+    sep = "  " + "-" * (len(col) - 2)
+    if global_rank == 0:
+        print("\n" + sep)
+        print(col)
+        print(sep)
+
     for op in ops:
         bench_fn = BENCH_FNS[op]
         for shape in shapes:
@@ -271,9 +279,13 @@ def worker(
 
             if global_rank == 0:
                 print(
-                    f"  {op:<16} {shape_str(shape):>14}  {format_bytes(data_bytes):>10}  "
-                    f"{avg_ms * 1000:>10.2f} us  {alg_bw_gbps:>8.2f}  {bus_bw_gbps:>8.2f} GB/s"
+                    f"  {op:<16}  {dtype_name:<10}  {shape_str(shape):<14}"
+                    f"  {data_bytes/1e6:>8.3f}  {avg_ms * 1000:>10.2f}"
+                    f"  {alg_bw_gbps:>11.2f}  {bus_bw_gbps:>11.2f}"
                 )
+
+    if global_rank == 0:
+        print(sep)
 
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
@@ -364,17 +376,10 @@ Examples:
     world_size = args.nproc_per_node * args.node_size
     torch_dtype = DTYPE_MAP[args.dtype]
 
-    print(f"pyccl benchmark")
-    print(f"  ops:        {ops}")
-    print(f"  shapes:     {[shape_str(s) for s in shapes]}")
-    print(f"  dtype:      {args.dtype} ({torch_dtype.itemsize} bytes/elem)")
-    print(f"  device:     {args.device}")
-    print(f"  world_size: {world_size}")
-    print(f"  warmup:     {args.warmup}  iters: {args.iters}")
-    print()
-    print(f"  {'operation':<16} {'shape':>14}  {'data size':>10}  "
-          f"{'time (us)':>10}  {'algbw':>8}  {'busbw':>8}")
-    print(f"  {'-'*16} {'-'*14}  {'-'*10}  {'-'*10}  {'-'*8}  {'-'*8}")
+    print(f"pyccl collective benchmark  world={world_size}  device={args.device}  "
+          f"dtype={args.dtype}")
+    print(f"ops={ops}  shapes={[shape_str(s) for s in shapes]}  "
+          f"warmup={args.warmup}  iters={args.iters}")
 
     procs = []
     for local_rank in range(args.nproc_per_node):
